@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="popup.css"/>
+    <script src="PptxGenJS/libs/jszip.min.js"></script>
+    <script src="PptxGenJS/dist/pptxgen.min.js"></script>
+
+    <!--<script src="/deps/idb-file-storage.js"></script>-->
+    <!--<script src="/deps/uuidv4.js"></script> -->
+    <script src="popup.js"></script>
+    <script src="player.js"></script>
+  </head>
+  <body>
+    <div id="player"></div>
+    <div id="app">
+      <button class="save-collection" id="save">save</button> <br>
+      <progress id="save-progress" style="display: none;"></progress>
+      <progress id="save-progressing" style="display: none;"></progress>
+      
+    </div>
+    <p>scene list:</p>
+    <div id="app2" class="scroll-container" ></div>
+  </body>
+</html>
