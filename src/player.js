@@ -1,77 +1,102 @@
+"use strict";
+
 let youTubeIframeAPIReady;
 
-window.addEventListener( "load", function() {
-    const save = setupFromURL( document.location.href );
-
-    document.getElementById( "save" ).addEventListener( "click", async function() {
-        const progress = document.getElementById( "save-progress" );
-        const progressing = document.getElementById( "save-progressing" );
-
-        progress.style.display = "block";
-        progress.value = 0;
-        progress.max = 100;
-        await save( function( index, max ) {
-            if ( index == max ) {
-                progressing.style.display = "block";
-                progress.style.display = "none";
-            } else {
-                progress.max = max;
-                progress.value = index;
-            }
-        });
-        progress.value = progress.max;
-        progressing.style.display = "none";
-        progress.style.display = "block";
-    } );
-});
+const PLAYER_STATE_INI = -1;
+const PLAYER_STATE_END = 0;
+const PLAYER_STATE_PLAY = 1;
+const PLAYER_STATE_PAUSE = 2;
+const PLAYER_STATE_BUF = 3;
+const PLAYER_STATE_READY = 5;
 
 
-function setupFromURL( urltxt ) {
+async function setupFromURL( urltxt, setupPlayer ) {
     let url = new URL( urltxt );
     let query = url.searchParams;
+
+    let activeTab = await browser.tabs.get( parseInt( query.get( "tabid" ) ) );
     
-    return setup( query.get( "videoid" ), query.get( "width" ), query.get( "height" ) );
+    return await setup( query.get( "videoid" ),
+                        query.get( "width" ), query.get( "height" ),
+                        activeTab, setupPlayer );
 }
 
-function setup( video_id, player_width, player_height ) {
-    if ( ! video_id ) {
-        alert( "not found 'video_id'" );
-        return;
-    }
-    if ( ! player_width ) {
-        player_width = 1280;
-    }
-    if ( ! player_height ) {
-        player_height = 640;
-    }
-    
-    const shrinkSize = 4;
-
-    let browseCapture = true;
-    let diff_thresh = 500000;
-    if ( typeof browser == 'undefined' ) {
-        browseCapture = false;
-        diff_thresh = 1000;
-    }
-
-    
+function loadPlayer() {
     let tag = document.createElement('script');
 
     tag.src = "https://www.youtube.com/iframe_api";
     let firstScriptTag = document.getElementsByTagName('script')[0];
     firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+}
 
-    class TimeInfo {
-        constructor( sec, smallImage ) {
-            this.sec = sec;
-            this.smallImage = smallImage;
-            this.scene = null;
-            this.sameInfo = null;
+class TimeInfo {
+    constructor( sec, smallImage ) {
+        this.sec = sec;
+        this.smallImage = smallImage;
+        this.scene = null;
+        this.sameInfo = null;
+    }
+}
+
+class Controller {
+    static async create( video_id, player_width, player_height, activeTab, setupPlayer ) {
+        let cont = new Controller( video_id, player_width, player_height, activeTab );
+        if ( setupPlayer ) {
+            cont.player = await setupPlayer(
+                activeTab.id,
+                async () => await cont.onPlayerStateChangeFromYT() );
+        }
+        return cont;
+    }
+    
+    constructor( video_id, player_width, player_height, activeTab ) {
+        this.activeTab = activeTab;
+        if ( ! player_width ) {
+            player_width = 1280;
+        }
+        this.player_width = player_width;
+        if ( ! player_height ) {
+            player_height = 640;
+        }
+        this.player_height = player_height;
+
+        this.shrinkSize = 4;
+
+        this.browseCapture = true;
+        this.diff_thresh = 500000;
+        if ( typeof browser == 'undefined' ) {
+            this.browseCapture = false;
+            this.diff_thresh = 1000;
         }
         
+
+        this.timeMap = new Map();
+
+
+        this.player = undefined;
+        this.intervalId = undefined;
+        youTubeIframeAPIReady = function ( self ) {
+            return () => {
+                if ( !video_id ) {
+                    alert( "not found 'video_id'" );
+                    return;
+                }
+                
+                this.player = new YT.Player('player', {
+                    height: self.player_height.toString( 10 ),
+                    width: self.player_width.toString( 10 ),
+                    videoId: video_id,
+                    events: {
+                        'onReady': () => self.onPlayerReady,
+                        'onStateChange': () => self.onPlayerStateChange(),
+                    }
+                });
+            };
+        }(this);
     }
 
-    function createCanvasForImageData( imgData ) {
+
+    createCanvasForImageData( imgData ) {
         let canvas = document.createElement("canvas");
         canvas.width = imgData.width;
         canvas.height = imgData.height;
@@ -81,7 +106,7 @@ function setup( video_id, player_width, player_height ) {
     }
 
 
-    function createCanvasForImage( img ) {
+    createCanvasForImage( img ) {
         let canvas = document.createElement("canvas");
         canvas.width = img.width;
         canvas.height = img.height;
@@ -92,9 +117,8 @@ function setup( video_id, player_width, player_height ) {
 
     
     
-    let timeMap = new Map();
-    function timeKeySort() {
-        let keyList = Array.from( timeMap.keys() ).sort( function( sec1, sec2 ) {
+    timeKeySort() {
+        let keyList = Array.from( this.timeMap.keys() ).sort( function( sec1, sec2 ) {
             if ( sec1 < sec2 ) {
                 return -1;
             } else if (sec1 > sec2 ) {
@@ -107,15 +131,15 @@ function setup( video_id, player_width, player_height ) {
     }
 
 
-    async function save( progress ) {
+    async save( progress ) {
         let pres = new PptxGenJS();
 
-        let keyList = timeKeySort();
-        for ( index = 0; index < keyList.length; index++ ) {
+        let keyList = this.timeKeySort();
+        for ( let index = 0; index < keyList.length; index++ ) {
             const sec = keyList[ index ];
             progress( index, keyList.length );
             
-            const timeInfo = timeMap.get( sec );
+            const timeInfo = this.timeMap.get( sec );
             const img = timeInfo.scene;
             if ( img ) {
                 // 時間がかかる処理なので、 Promise 化する
@@ -128,7 +152,7 @@ function setup( video_id, player_width, player_height ) {
                         // let textboxOpts = { x: 1, y: 1, color: "363636" };
                         // slide.addText(textboxText, textboxOpts);
 
-                        let canvas = createCanvasForImageData( img );
+                        let canvas = this.createCanvasForImageData( img );
                         let url = canvas.toDataURL();
                         slide.addImage({ data: url,
                                          x: "10%", y: "5%", w: "80%", h:"80%"
@@ -145,34 +169,20 @@ function setup( video_id, player_width, player_height ) {
         await pres.writeFile();
     }
 
-    let player;
-    let intervalId;
-    youTubeIframeAPIReady = function () {
-        player = new YT.Player('player', {
-            height: player_height.toString( 10 ),
-            width: player_width.toString( 10 ),
-            videoId: video_id,
-            events: {
-                'onReady': onPlayerReady,
-                'onStateChange': onPlayerStateChange,
-            }
-        });
-    };
-    
-
     /**
        指定秒数の timeInfo を取得する。
        
     */
-    function getTimeInfo( sec ) {
-        let prev = timeMap.get( sec );
+    getTimeInfo( sec ) {
+        let prev = this.timeMap.get( sec );
         if ( prev === undefined ) {
             // timeMap に sec が登録されていない場合、
             // timeMap に登録されている時間情報をソートして、直前のものを探す
-            let keyList = timeKeySort().reverse();
-            const index = keyList.findIndex( ( key ) => timeMap.get( key ).sec <= sec );
+            let keyList = this.timeKeySort().reverse();
+            const index = keyList.findIndex(
+                ( key ) => this.timeMap.get( key ).sec <= sec );
             if ( index >= 0 )  {
-                prev = timeMap.get( keyList[ index ] );
+                prev = this.timeMap.get( keyList[ index ] );
             }
         }
         if ( prev ) {
@@ -180,7 +190,7 @@ function setup( video_id, player_width, player_height ) {
                 if ( prev.sameInfo == prev ) {
                     return prev;
                 }
-                return getTimeInfo( prev.sameInfo.sec );
+                return this.getTimeInfo( prev.sameInfo.sec );
             }
             return prev;
         }
@@ -193,47 +203,52 @@ function setup( video_id, player_width, player_height ) {
 
        現状は単純な差分の絶対値の合計が閾値を越えているかどうかで判定している。
     */
-    function isSceneChange( timeInfo1, timeInfo2 ) {
+    isSceneChange( timeInfo1, timeInfo2 ) {
         const img1 = timeInfo1.smallImage.data;
         const img2 = timeInfo2.smallImage.data;
 
         let totalDiff = 0;
-        for ( index = 0; index < img1.length; index++ ) {
+        for ( let index = 0; index < img1.length; index++ ) {
             const diff = img1[ index ] - img2[ index ];
             totalDiff += Math.abs( diff );
         }
         console.log( `diff total ${totalDiff} ${timeInfo1.sec}, ${timeInfo2.sec} `);
-        return totalDiff > diff_thresh;
+        return totalDiff > this.diff_thresh;
     }
 
-    function onPlayerReady(event) {
-        player.playVideo();
+    async onPlayerReady(event) {
+        await this.player.playVideo();
     }
 
-    function onPlayerStateChange() {
-        if ( player.getPlayerState() == 1 ) {
-            if ( intervalId ) {
+    async onPlayerStateChange() {
+        return await this.onPlayerStateChangeFromYT();
+    }
+
+    async onPlayerStateChangeFromYT() {
+        console.log( "change", this.player, this.player.getPlayerState );
+        if ( await this.player.getPlayerState() == PLAYER_STATE_PLAY ) {
+            if ( this.intervalId ) {
             } else {
-                intervalId = setInterval( async function () {
+                this.intervalId = setInterval( async function ( self ) {
                     // 再生中かどうか確認し、
                     // 再生画面をキャプチャして画面が切り替わっているかどうかの情報を、
                     // timeMap に設定する。
-                    if ( player.getPlayerState() == 1 ) {
-                        let sec = Math.floor( player.getCurrentTime() );
+                    if ( await self.player.getPlayerState() == PLAYER_STATE_PLAY ) {
+                        let sec = Math.floor( await self.player.getCurrentTime() );
                         console.log( sec );
-                        if ( timeMap.get( sec ) ) {
+                        if ( self.timeMap.get( sec ) ) {
                         } else {
-                            let img = await captureImage();
-                            let small = await shrinkImage( img, shrinkSize );
+                            let img = await self.captureImage();
+                            let small = await self.shrinkImage( img, self.shrinkSize );
                             let timeInfo = new TimeInfo( sec, small );
-                            let prev = getTimeInfo( sec - 1 );
-                            timeMap.set( sec, timeInfo );
+                            let prev = self.getTimeInfo( sec - 1 );
+                            self.timeMap.set( sec, timeInfo );
                             if ( prev ) {
-                                if ( isSceneChange( timeInfo, prev ) ) {
+                                if ( self.isSceneChange( timeInfo, prev ) ) {
                                     timeInfo.scene = img;
                                     
                                     let div = document.getElementById( "app2" );
-                                    let canvas = createCanvasForImageData( small );
+                                    let canvas = self.createCanvasForImageData( small );
                                     //let canvas = createCanvasForImageData( img );
                                     div.appendChild( canvas );
                                 } else {
@@ -247,19 +262,19 @@ function setup( video_id, player_width, player_height ) {
                             }
                         }
                     }
-                }, 2000 );
+                }, 2000, this );
             }
         } else {
-            clearInterval( intervalId );
-            intervalId = null;
+            clearInterval( this.intervalId );
+            this.intervalId = null;
         }
     }
 
-    function stopVideo() {
-        player.stopVideo();
+    async stopVideo() {
+        await this.player.stopVideo();
     }
 
-    async function loadImage(url) {
+    async loadImage(url) {
         return new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = () => resolve(img);
@@ -271,25 +286,24 @@ function setup( video_id, player_width, player_height ) {
     /**
        表示中のカレントタブを画像データに変換して返す。
     */
-    async function captureImage() {
-        if ( browseCapture ) {
-            let tabs = await browser.tabs.query({ active: true, currentWindow: true });
-            let activeTab = tabs[ 0 ];
+    async captureImage() {
+        if ( this.browseCapture ) {
+            // let tabs = await browser.tabs.query({ active: true, currentWindow: true });
+            // let activeTab = tabs[ 0 ];
 
             // タブのスクリーンショットを取得
             let imageUrl = await browser.tabs.captureVisibleTab(
-                activeTab.windowId, { format: 'png' } );
+                this.activeTab.windowId, { format: 'png' } );
 
-            let img = await loadImage( imageUrl );
-            let canvas = createCanvasForImage( img );
+            let img = await this.loadImage( imageUrl );
+            let canvas = this.createCanvasForImage( img );
             let ctx = canvas.getContext( "2d" );
-            let playerEle = document.getElementById( "player" );
-            let rect = playerEle.getBoundingClientRect();
+            let rect = await this.player.getClientRect();
 
             // スケールの調整
             let bodyRect = document.body.getBoundingClientRect();
-            let magX = img.width / activeTab.width;
-            let magY = img.height / activeTab.height;
+            let magX = img.width / this.activeTab.width;
+            let magY = img.height / this.activeTab.height;
             
             
             return ctx.getImageData( rect.x * magX, rect.y * magY,
@@ -318,8 +332,8 @@ function setup( video_id, player_width, player_height ) {
     /**
        img を mag 分の 1 に縮小した画像 ImageData を返す。
     */
-    async function shrinkImage( imgData, mag ) {
-        let canvasSrc = createCanvasForImageData( imgData );
+    async shrinkImage( imgData, mag ) {
+        let canvasSrc = this.createCanvasForImageData( imgData );
 
         let canvas = document.createElement("canvas");
         canvas.width = imgData.width;
@@ -329,8 +343,15 @@ function setup( video_id, player_width, player_height ) {
 
         return await ctx.getImageData( 0, 0, imgData.width/mag, imgData.height/mag );
     }
+}
 
-    return save;
+
+async function setup( video_id, player_width, player_height, activeTab, setupPlayer ) {
+
+    let cont = await Controller.create(
+        video_id, player_width, player_height, activeTab, setupPlayer );
+
+    return async ( progress ) => cont.save( progress );
 }
 
 // www.youtube.com/iframe_api のスクリプトロード後、

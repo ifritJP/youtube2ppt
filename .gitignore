@@ -1,6 +1,6 @@
 release
-PptxGenJS/.github/
-PptxGenJS/demos/
-PptxGenJS/tools/
-PptxGenJS/src/
+src/PptxGenJS/.github/
+src/PptxGenJS/demos/
+src/PptxGenJS/tools/
+src/PptxGenJS/src/
 Makefile.local

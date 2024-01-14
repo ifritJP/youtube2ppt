@@ -6,7 +6,6 @@ browser.runtime.onMessage.addListener((msg) => {
 
 // Open the UI to navigate the collection images in a tab.
 browser.browserAction.onClicked.addListener( async () => {
-
     let tabs = await browser.tabs.query({ active: true, currentWindow: true });
     let activeTab = tabs[ 0 ];
     let url = new URL( activeTab.url );
@@ -29,20 +28,20 @@ browser.browserAction.onClicked.addListener( async () => {
     } catch ( err ) {
         console.error( err );
     }
-    
-    
 
     let videoId = query.get( "v" );
-    let path = `./popup.html?width=${rect.width}&height=${rect.height}`;
-    
+    let path = `http://localhost:28080/server/popup.html?width=${rect.width}&height=${rect.height}`;
     if ( videoId ) {
         path += "&videoid=" + videoId;
     }
+
     try {
+        let newTab = await browser.tabs.create({ url: path });
         await browser.windows.create({
-            type: "popup", url: path,
+            type: "popup", url: `./popup.html?tabid=${newTab.id}`,
             //type: "normal", url: "/popup.html",
-            top: 0, left: 0, width: rect.width, height: rect.height + 100,
+            top: 0, left: 0, width: 300, height: 400,
+            // top: 0, left: 0, width: rect.width, height: rect.height + 100,
         });
     } catch (err) {
         console.error(err);
