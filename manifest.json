@@ -1,7 +1,7 @@
 {
     "manifest_version": 2,
     "name": "youtube-2-ppt",
-    "version": "1.0",
+    "version": "1.0.1",
     "content_security_policy": "script-src 'self' https://*.youtube.com; object-src 'self'",
 
 
