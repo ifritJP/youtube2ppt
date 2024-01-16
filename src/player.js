@@ -1,5 +1,10 @@
 "use strict";
 
+if ( globalThis[ "chrome" ] === "undefine" ) {
+    globalThis[ "chrome" ] = browser;
+}
+
+
 let youTubeIframeAPIReady;
 
 const PLAYER_STATE_INI = -1;
@@ -14,7 +19,7 @@ async function setupFromURL( urltxt, setupPlayer ) {
     let url = new URL( urltxt );
     let query = url.searchParams;
 
-    let activeTab = await browser.tabs.get( parseInt( query.get( "tabid" ) ) );
+    let activeTab = await chrome.tabs.get( parseInt( query.get( "tabid" ) ) );
     
     return await setup( query.get( "videoid" ),
                         query.get( "width" ), query.get( "height" ),
@@ -64,10 +69,10 @@ class Controller {
 
         this.browseCapture = true;
         this.diff_thresh = 500000;
-        if ( typeof browser == 'undefined' ) {
-            this.browseCapture = false;
-            this.diff_thresh = 1000;
-        }
+        // if ( typeof browser == 'undefined' ) {
+        //     this.browseCapture = false;
+        //     this.diff_thresh = 1000;
+        // }
         
 
         this.timeMap = new Map();
@@ -230,6 +235,12 @@ class Controller {
             if ( this.intervalId ) {
             } else {
                 this.intervalId = setInterval( async function ( self ) {
+                    function addScene( img ) {
+                        let div = document.getElementById( "app2" );
+                        let canvas = self.createCanvasForImageData( img );
+                        //let canvas = createCanvasForImageData( img );
+                        div.appendChild( canvas );
+                    }
                     // 再生中かどうか確認し、
                     // 再生画面をキャプチャして画面が切り替わっているかどうかの情報を、
                     // timeMap に設定する。
@@ -240,22 +251,21 @@ class Controller {
                         } else {
                             let img = await self.captureImage();
                             let small = await self.shrinkImage( img, self.shrinkSize );
+                            let thumbnail = await self.shrinkImage( small, 3 );
                             let timeInfo = new TimeInfo( sec, small );
                             let prev = self.getTimeInfo( sec - 1 );
                             self.timeMap.set( sec, timeInfo );
                             if ( prev ) {
                                 if ( self.isSceneChange( timeInfo, prev ) ) {
                                     timeInfo.scene = img;
-                                    
-                                    let div = document.getElementById( "app2" );
-                                    let canvas = self.createCanvasForImageData( small );
-                                    //let canvas = createCanvasForImageData( img );
-                                    div.appendChild( canvas );
+
+                                    addScene( thumbnail );
                                 } else {
                                     timeInfo.sameInfo = prev;
                                 }
                             } else {
                                 timeInfo.scene = img;
+                                addScene( thumbnail );
                             }
                             if ( timeInfo.scene ) {
                                 console.log( "scene change -- " + sec );
@@ -288,11 +298,15 @@ class Controller {
     */
     async captureImage() {
         if ( this.browseCapture ) {
-            // let tabs = await browser.tabs.query({ active: true, currentWindow: true });
+            // let tabs = await chrome.tabs.query({ active: true, currentWindow: true });
             // let activeTab = tabs[ 0 ];
 
+            if ( !this.activeTab.active ) {
+                // スクリーンショットを取得する前に tab をアクティブに変更
+                await chrome.tabs.update( this.activeTab.id, { active:true } );
+            }
             // タブのスクリーンショットを取得
-            let imageUrl = await browser.tabs.captureVisibleTab(
+            let imageUrl = await chrome.tabs.captureVisibleTab(
                 this.activeTab.windowId, { format: 'png' } );
 
             let img = await this.loadImage( imageUrl );

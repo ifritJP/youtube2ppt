@@ -55,7 +55,7 @@ async function setup( video_id, player_width, player_height ) {
     };
  
     async function onPlayerReady(event) {
-        await player.playVideo();
+        //await player.playVideo();
     }
 
     async function onPlayerStateChange() {

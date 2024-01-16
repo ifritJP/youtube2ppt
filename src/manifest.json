@@ -1,13 +1,13 @@
 {
-    "manifest_version": 2,
-    "name": "youtube-2-ppt",
-    "version": "1.0.1",
+    "manifest_version": 3,
+    "name": "youtube2ppt",
+    "version": "1.0.2",
 
     "icons": {
 	"48": "images/icon.png"
     },
 
-    "browser_action": {
+    "action": {
 	"default_icon": {
 	    "48": "images/icon.png"
 	},
@@ -15,12 +15,16 @@
     },
 
     "background": {
-	"scripts": [ "player.js", "playerInYT.js", "background.js"]
+	"service_worker": "background.js"
     },
 
     "permissions": [
-	"<all_urls>",
+	"activeTab",
 	"tabs",
 	"scripting"
+    ],
+    "host_permissions": [
+	"https://ifritjp.github.io/*",
+	"https://www.youtube.com/*"
     ]
 }

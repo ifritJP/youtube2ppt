@@ -10,19 +10,17 @@ all:
 build:
 	mkdir -p release
 	-rm -f release/y.xpi
-	zip -r -FS release/y.xpi . -x						\
-		'test/*' 'release/*' '.git/*' '*~' 'PptxGenJS/demos/*'		\
-		'pack/*'
+	zip -r -FS release/y.xpi . -x				\
+		'test/*' 'release/*' '.git/*' '*~' 
 
 sign:
 	web-ext sign -s src --api-key=$(JWT_ISSUER)		\
 			--api-secret=$(JWT_SECRET)		\
+			--channel "unlisted"			\
 			-i Makefile.local -i ".git" -i '*~'	\
-			-i 'options/*~' -i test			\
-			-i 'PptxGenJS/demos' -i pack
+			-i test	-i server			\
+			-i 'options/*~' -i test
 
-#			--channel "unlisted"			\
-#			--use-submission-api			\
 
 run-ext:
 	web-ext run -s src --devtools --keep-profile-changes		\

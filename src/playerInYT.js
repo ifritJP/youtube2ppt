@@ -1,5 +1,10 @@
 "use strict";
 
+if ( globalThis[ "chrome" ] === "undefine" ) {
+    globalThis[ "chrome" ] = browser;
+}
+
+
 class Player {
     constructor( tabId, onStateChangeFn ) {
         this.tabId = tabId;
@@ -20,7 +25,7 @@ class Player {
     async getPlayerState() {
         let result;
         try {
-            let resp = await browser.scripting.executeScript( {
+            let resp = await chrome.scripting.executeScript( {
                 target: {
                     tabId: this.tabId
                 },
@@ -37,7 +42,7 @@ class Player {
     async getCurrentTime() {
         let result;
         try {
-            let resp = await browser.scripting.executeScript( {
+            let resp = await chrome.scripting.executeScript( {
                 target: {
                     tabId: this.tabId
                 },
@@ -55,7 +60,7 @@ class Player {
     async getClientRect() {
         let result;
         try {
-            let resp = await browser.scripting.executeScript( {
+            let resp = await chrome.scripting.executeScript( {
                 target: {
                     tabId: this.tabId
                 },

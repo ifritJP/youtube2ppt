@@ -1,6 +1,10 @@
 release
-src/PptxGenJS/.github/
-src/PptxGenJS/demos/
-src/PptxGenJS/tools/
-src/PptxGenJS/src/
+src/oss/PptxGenJS/.github/
+src/oss/PptxGenJS/demos/
+src/oss/PptxGenJS/tools/
+src/oss/PptxGenJS/src/
 Makefile.local
+*.pem
+*~
+web-ext-artifacts
+.web-extension-id
